@@ -63,23 +63,47 @@ int main()
         std::cout << "Received " << bytesRead << " bytes: " << buffer << std::endl;
 
         // Create an empty response
-        DNSResponse response;
-        // Need to convert to network byte,
-        response.transactionId = htons(1234);
-        response.flags = htons(1 << 15);
+        DNSMessage response;
+
+        // Handle Header
+        response.header.transactionId = htons(1234);
+        response.header.flags = htons(1 << 15);
+        response.header.qdCount = htons(1);
         // 0 should be same for both network and host byte.
-        response.quesCount = 0;
-        response.ansCount = 0;
-        response.authCount = 0;
-        response.addiCount = 0;
+        response.header.anCount = 0;
+        response.header.nsCount = 0;
+        response.header.arCount = 0;
+
+        // Handle question
+        response.questions = new DNSQuestion[ntohs(response.header.qdCount)]; // currently have one question
+        response.questions->qName = "\x0c"
+                                    "codecrafters"
+                                    "\x02"
+                                    "io";
+        response.questions->qType = htons(1);
+        response.questions->qClass = htons(1);
+
+        // Parse everything inside a buffer:
+        char sendBuf[512];
+        size_t offset = 0;
+        serializeDNSMessage(response, sendBuf, offset);
         // Send response
-        if (sendto(udpSocket, &response, sizeof(response), 0, reinterpret_cast<struct sockaddr *>(&clientAddress), sizeof(clientAddress)) == -1)
+
+        if (sendto(udpSocket, sendBuf, offset, 0, reinterpret_cast<struct sockaddr *>(&clientAddress), sizeof(clientAddress)) == -1)
         {
             perror("Failed to send response");
         }
+        // Free data
+        delete[] response.questions;
     }
 
     close(udpSocket);
 
     return 0;
 }
+/*
+Test command
+cat input.txt | nc -u 127.0.0.1 2053 > output.txt
+
+hexdump -C output.txt
+*/

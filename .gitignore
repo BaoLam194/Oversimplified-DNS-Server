@@ -1049,3 +1049,5 @@ vcpkg_installed
 
 # My file
 .gdb_history
+input.txt
+output.txt
