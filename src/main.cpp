@@ -1,8 +1,6 @@
 #include <iostream>
 #include <cstring>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <unistd.h>
+#include "netstruct.hpp"
 
 int main()
 {
@@ -16,7 +14,7 @@ int main()
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     std::cout << "Logs from your program will appear here!" << std::endl;
 
-        int udpSocket;
+    int udpSocket;
     struct sockaddr_in clientAddress;
 
     udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -65,10 +63,17 @@ int main()
         std::cout << "Received " << bytesRead << " bytes: " << buffer << std::endl;
 
         // Create an empty response
-        char response[1] = {'\0'};
-
+        DNSResponse response;
+        // Need to convert to network byte,
+        response.transactionId = htons(1234);
+        response.flags = htons(1 << 15);
+        // 0 should be same for both network and host byte.
+        response.quesCount = 0;
+        response.ansCount = 0;
+        response.authCount = 0;
+        response.addiCount = 0;
         // Send response
-        if (sendto(udpSocket, response, sizeof(response), 0, reinterpret_cast<struct sockaddr *>(&clientAddress), sizeof(clientAddress)) == -1)
+        if (sendto(udpSocket, &response, sizeof(response), 0, reinterpret_cast<struct sockaddr *>(&clientAddress), sizeof(clientAddress)) == -1)
         {
             perror("Failed to send response");
         }
