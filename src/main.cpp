@@ -70,7 +70,7 @@ int main()
         response.header.flags = htons(1 << 15);
         response.header.qdCount = htons(1);
         // 0 should be same for both network and host byte.
-        response.header.anCount = 0;
+        response.header.anCount = htons(1);
         response.header.nsCount = 0;
         response.header.arCount = 0;
 
@@ -80,8 +80,11 @@ int main()
                                     "codecrafters"
                                     "\x02"
                                     "io";
+        response.questions->qName.push_back('\0'); // add terminale byte for name.
         response.questions->qType = htons(1);
         response.questions->qClass = htons(1);
+
+        // Handle answer
 
         // Parse everything inside a buffer:
         char sendBuf[512];

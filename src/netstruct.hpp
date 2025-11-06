@@ -43,8 +43,6 @@ void serializeDNSMessage(DNSMessage &message, char *buffer, size_t &len)
         DNSQuestion &q = message.questions[i];
         memcpy(buffer + len, q.qName.data(), (size_t)q.qName.length());
         len += q.qName.length();
-        memcpy(buffer + len, "\x00", 1);
-        len += 1;
         memcpy(buffer + len, &(q.qType), sizeof(uint16_t));
         len += sizeof(uint16_t);
         memcpy(buffer + len, &(q.qClass), sizeof(uint16_t));
