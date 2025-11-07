@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <string>
 #include <cstring>
+#include <arpa/inet.h>
 
 // Default should be network order byte, so need to change to host byte order before changing
 struct DNSHeader
