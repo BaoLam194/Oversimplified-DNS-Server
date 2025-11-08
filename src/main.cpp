@@ -1,10 +1,10 @@
 /////////////////////////////////////////////
 //////////       server side        /////////
 /////////////////////////////////////////////
-
 #include <iostream>
 #include <cstring>
 #include "netstruct.hpp"
+#include <fstream>
 
 int main()
 {
@@ -19,7 +19,7 @@ int main()
     std::cout << "Logs from your program will appear here!" << std::endl;
 
     int udpSocket;
-    struct sockaddr_in clientAddress;
+    sockaddr_in clientAddress;
 
     udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (udpSocket == -1)
@@ -65,18 +65,17 @@ int main()
 
         buffer[bytesRead] = '\0';
         std::cout << "Received " << bytesRead << " bytes: " << buffer << std::endl;
+        // Read the receive into a file for debugging
 
-        // Create an empty response
+        std::ofstream file("./src/clientQuery.txt", std::ios::out | std::ios::trunc);
+        file.write(buffer, bytesRead);
+        file.close();
+        std::cout << "Just received a dns query, stored in src/clientQuery.txt" << std::endl;
+
+        // Create an empty message and parse the query into response
         DNSMessage response;
-
-        // Handle Header
-        response.header.transactionId = htons(1234);
-        response.header.flags = htons(1 << 15);
-        response.header.qdCount = htons(1);
-        // 0 should be same for both network and host byte.
-        response.header.anCount = htons(1);
-        response.header.nsCount = 0;
-        response.header.arCount = 0;
+        size_t bufOffset = 0;
+        parseDNSMessage(response, buffer, bufOffset);
 
         // Handle question
         response.questions = new DNSQuestion[ntohs(response.header.qdCount)]; // currently have one question
@@ -100,10 +99,10 @@ int main()
                                   "\x08"
                                   "\x08";
 
-        // Serialize everything inside a buffer:
+        // Serialize everything into a buffer:
         char sendBuf[512];
         size_t offset = 0;
-        serializeDNSMessage(response, sendBuf, offset);
+        serializeDNSMessage(sendBuf, response, offset);
         // Send response
 
         if (sendto(udpSocket, sendBuf, offset, 0, reinterpret_cast<struct sockaddr *>(&clientAddress), sizeof(clientAddress)) == -1)
@@ -112,6 +111,7 @@ int main()
         }
         // Free data
         delete[] response.questions;
+        std::cout << "Send back DNS reply to answer the query" << std::endl;
     }
 
     close(udpSocket);

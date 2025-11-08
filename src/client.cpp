@@ -82,6 +82,6 @@ int main(int argc, char **argv) // Take in a ipv4 address argument and send to t
     std::ofstream file("./src/serverResponse.txt", std::ios::out | std::ios::trunc);
     file.write(buffer, bytesReceived);
     file.close();
-    std::cout << "Received a dns response, stored in src/clientQuery.txt" << std::endl;
+    std::cout << "Received a dns response, stored in src/serverResponse.txt" << std::endl;
     close(udpSocket);
 }
