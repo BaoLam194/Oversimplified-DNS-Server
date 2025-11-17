@@ -83,7 +83,7 @@ int main()
         response.header.transactionId = query.header.transactionId;
         if (ntohs(query.header.flags) & (1 << 15)) // if flag bit is reply, then wrong
         {
-            std::cerr << "Expected a query, reply received. " << strerror(errno) << std::endl;
+            std::cerr << "Expected a query, received reply." << strerror(errno) << std::endl;
             return 1;
         }
         response.header.flags = query.header.flags | htons(1 << 15);
@@ -101,7 +101,7 @@ int main()
             q.qName = query.questions[i].qName;
             if (ntohs(query.questions[i].qType) != 1 || ntohs(query.questions[i].qClass) != 1)
             {
-                std::cerr << "Expected a 'A' record type and 'IN' record class only." << std::endl;
+                std::cerr << "Expected a 'A' record type and 'IN' record class for questions only. Wrong index =" << i << std::endl;
                 return 1;
             }
             q.qType = query.questions[i].qType;
@@ -117,7 +117,7 @@ int main()
             a.name = query.questions[i].qName;
             if (ntohs(query.questions[i].qType) != 1 || ntohs(query.questions[i].qClass) != 1)
             {
-                std::cerr << "Expected a 'A' record type and 'IN' record class onyl." << strerror(errno) << std::endl;
+                std::cerr << "Expected a 'A' record type and 'IN' record class for answers only. Wrong index =" << i << std::endl;
                 return 1;
             }
             a.type = query.questions[i].qType;

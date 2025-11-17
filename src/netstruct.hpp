@@ -80,29 +80,29 @@ std::string serializeName(std::string name)
 // Parse the labels into name \x0ccodecrafters\x02io\x00 -> codecrafters.io
 // Only works with correct serialized format from beginning
 // Store total_len for future use
-std::string parseName(char *buffer, size_t &pos, size_t &total_len, bool pointer)
+// Pointer only use last
+std::string parseName(char *buffer, size_t &pos, size_t &total_len)
 {
-    // if (pointer)
-    // { // deal differently if it is pointer in compressed packet
-
-    //     return "";
-    // }
     std::string result = "";
     size_t i = pos;
+    bool compressed = false;
     while (uint8_t(buffer[i]) != 0)
     { // parse each label by taking out the labels
         uint8_t len = uint8_t(buffer[i]);
-
         if (i != pos)
             result += '.';
-        // if (len & 0b11000000) // this indicate it is pointer
-        // {
-        //     // Find offset
-        //     uint16_t pointer = len << 8 + uint8_t(name[i + 1]);
-        //     uint16_t offset = pointer & ~(0b11000000 << 8);
-        //     i += 2;
-        //     continue;
-        // }
+        if (len & 0b11000000) // this indicate it is pointer, handle pointer recursively
+        {
+            // Construct pointer then find offset
+            uint16_t pointer = (uint16_t(len) << 8) | uint8_t(buffer[i + 1]);
+            uint16_t offset = pointer & ~(0b11000000 << 8);
+            size_t temp_pos = offset, dummy = 0;
+            std::string temp = parseName(buffer, temp_pos, dummy);
+            result += temp;
+            i += 2;
+            compressed = true;
+            break;
+        }
         for (int j = 1; j <= len; j++)
         {
             result += buffer[i + j];
@@ -110,7 +110,10 @@ std::string parseName(char *buffer, size_t &pos, size_t &total_len, bool pointer
         i += len + 1;
     }
     // Acount for \0
-    i++;
+    if (compressed == false)
+    {
+        i++;
+    }
     total_len = i - pos;
     pos = i;
     return result;
@@ -174,7 +177,7 @@ void parseDNSMessage(DNSMessage &dest, char *src, size_t &pos)
     {
         DNSQuestion q;
         size_t label_len = 0;
-        q.qName = parseName(src, pos, label_len, false);
+        q.qName = parseName(src, pos, label_len);
         memcpy(&q.qType, src + pos, sizeof(uint16_t));
         pos += sizeof(uint16_t);
         memcpy(&q.qClass, src + pos, sizeof(uint16_t));
