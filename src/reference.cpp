@@ -1,14 +1,14 @@
 /////////////////////////////////////////////
 //////////       server side        /////////
 /////////////////////////////////////////////
-// Acts as an intermediate server to forward query to higher level server.
+// Directly response DNS Server with fake response
 #include <iostream>
 #include <cstring>
 #include "netstruct.hpp"
 #include <fstream>
 #include <vector>
 
-int main(int argc, char **argv)
+int main()
 {
     // Flush after every std::cout / std::cerr
     std::cout << std::unitbuf;

@@ -1057,3 +1057,4 @@ src/*.txt
 
 *test
 *.cpp
+!src/*.cpp
