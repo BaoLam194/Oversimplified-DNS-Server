@@ -66,22 +66,21 @@ int main()
 
         buffer[bytesRead] = '\0';
         std::cout << "Received " << bytesRead << " bytes." << std::endl;
-
         // Read the receive into a file for debugging
-        // Parse the query into my struct
-        DNSMessage query;
-        size_t bufOffset = 0;
-        parseDNSMessage(query, buffer, bufOffset);
-
         std::ofstream file("./src/clientQuery.txt", std::ios::out | std::ios::trunc);
         file.write(buffer, bytesRead);
         file.close();
         std::cout << "Just received a dns query, stored in src/clientQuery.txt." << std::endl;
 
-        // Create an empty message and parse the query into response
+        // Parse the buffer into query
+        DNSMessage query;
+        size_t bufOffset = 0;
+        parseDNSMessage(query, buffer, bufOffset);
+
+        // Create an empty message and craft the response with the query
         DNSMessage response;
         // Handle Header
-        response.header.transactionId = htons(1234);
+        response.header.transactionId = query.header.transactionId;
         if (ntohs(query.header.flags) & (1 << 15)) // if flag bit is reply, then wrong
         {
             std::cerr << "Expected a query, reply received. " << strerror(errno) << std::endl;
@@ -102,7 +101,7 @@ int main()
             q.qName = query.questions[i].qName;
             if (ntohs(query.questions[i].qType) != 1 || ntohs(query.questions[i].qClass) != 1)
             {
-                std::cerr << "Expected a 'A' record type and 'IN' record class onyl." << strerror(errno) << std::endl;
+                std::cerr << "Expected a 'A' record type and 'IN' record class only." << std::endl;
                 return 1;
             }
             q.qType = query.questions[i].qType;

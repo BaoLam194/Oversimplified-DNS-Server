@@ -54,7 +54,7 @@ std::string serializeName(std::string name)
         if (len > 63)
         {
             std::cerr << "Invalid length for each label for serializ"
-                      << "ing,maximum allowed is 63, receive " << len << " characters " << strerror(errno) << std::endl;
+                      << "ing,maximum allowed is 63, receive " << len << " characters." << std::endl;
         }
         if (name[i] == '.')
         {
@@ -79,29 +79,40 @@ std::string serializeName(std::string name)
 }
 // Parse the labels into name \x0ccodecrafters\x02io\x00 -> codecrafters.io
 // Only works with correct serialized format from beginning
-std::string parseName(std::string name, bool pointer)
+// Store total_len for future use
+std::string parseName(char *buffer, size_t &pos, size_t &total_len, bool pointer)
 {
+    // if (pointer)
+    // { // deal differently if it is pointer in compressed packet
 
+    //     return "";
+    // }
     std::string result = "";
-    int i = 0;
-    while (name[i] != '\0')
+    size_t i = pos;
+    while (uint8_t(buffer[i]) != 0)
     { // parse each label by taking out the labels
-        uint8_t len = uint8_t(name[i]);
-        if (len > 63)
-        {
-            std::cerr << "Invalid length for each label for pars"
-                      << "ing, maximum allowed is 63, receive " << len << " characters " << strerror(errno) << std::endl;
-        }
-        if (i)
-            result += '.';
+        uint8_t len = uint8_t(buffer[i]);
 
+        if (i != pos)
+            result += '.';
+        // if (len & 0b11000000) // this indicate it is pointer
+        // {
+        //     // Find offset
+        //     uint16_t pointer = len << 8 + uint8_t(name[i + 1]);
+        //     uint16_t offset = pointer & ~(0b11000000 << 8);
+        //     i += 2;
+        //     continue;
+        // }
         for (int j = 1; j <= len; j++)
         {
-            result += name[i + j];
+            result += buffer[i + j];
         }
         i += len + 1;
     }
-
+    // Acount for \0
+    i++;
+    total_len = i - pos;
+    pos = i;
     return result;
 }
 
@@ -162,15 +173,8 @@ void parseDNSMessage(DNSMessage &dest, char *src, size_t &pos)
     for (int i = 0; i < numQ; i++)
     {
         DNSQuestion q;
-        int label_len = 0;
-        while (src[pos + label_len] != '\0')
-        {
-            uint8_t temp = uint8_t(src[pos + label_len]); // make sure it is unsigned interger from 0-255 only
-            label_len += temp + 1;                        // Go to next label count
-        }
-        label_len++; // acount for '\0';
-        q.qName = parseName(std::string(src + pos, src + pos + label_len), false);
-        pos += label_len;
+        size_t label_len = 0;
+        q.qName = parseName(src, pos, label_len, false);
         memcpy(&q.qType, src + pos, sizeof(uint16_t));
         pos += sizeof(uint16_t);
         memcpy(&q.qClass, src + pos, sizeof(uint16_t));
