@@ -8,30 +8,29 @@
 #include <vector>
 int main(int argc, char **argv) // Take in a ipv4 address argument and send to the server a dns query
 {
+    // Flush after every std::cout / std::cerr
+    std::cout << std::unitbuf;
+    std::cerr << std::unitbuf;
+    // Disable output buffering
+    setbuf(stdout, NULL);
+
     if (argc != 2)
     {
-        std::cerr << "Your are giving " << argc - 1 << " arguments, 1 expected" << strerror(errno) << std::endl;
+        std::cerr << "Your are giving " << argc - 1 << " arguments, 1 expected!" << std::endl;
         return 1;
     }
     // Convert the argument into network ip address
     uint32_t ser_ip;
     if (!inet_pton(AF_INET, argv[1], &ser_ip))
     {
-        std::cerr << "Not a correct IPv4 address!: " << strerror(errno) << std::endl;
+        std::cerr << "Not a correct IPv4 address!" << std::endl;
         return 1;
     }
-    // Flush after every std::cout / std::cerr
-    std::cout << std::unitbuf;
-    std::cerr << std::unitbuf;
-
-    // Disable output buffering
-    setbuf(stdout, NULL);
     int udpSocket;
-
     udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (udpSocket == -1)
     {
-        std::cerr << "Socket creation failed: " << strerror(errno) << "..." << std::endl;
+        std::cerr << "Socket creation failed. Please try again!" << std::endl;
         return 1;
     }
     sockaddr_in serverAddress = {
@@ -66,7 +65,7 @@ int main(int argc, char **argv) // Take in a ipv4 address argument and send to t
     // Send to serverAddress a dns query
     if (!sendto(udpSocket, sendBuf, offset, 0, reinterpret_cast<sockaddr *>(&serverAddress), sizeof(serverAddress)))
     {
-        std::cerr << "Send data fails: " << strerror(errno) << "..." << std::endl;
+        std::cerr << "Send data fails. Please try again!" << std::endl;
         return 1;
     }
 
@@ -78,13 +77,13 @@ int main(int argc, char **argv) // Take in a ipv4 address argument and send to t
     bytesReceived = recvfrom(udpSocket, buffer, sizeof(buffer), 0, reinterpret_cast<sockaddr *>(&recvAddr), &recvAddrLen);
     if (bytesReceived == -1)
     {
-        std::cerr << "Error receiving dns response: " << strerror(errno) << "..." << std::endl;
+        std::cerr << "Error receiving dns response! " << std::endl;
         return 1;
     }
     // Write back the dns response into a file
     std::ofstream file("./src/serverResponse.txt", std::ios::out | std::ios::trunc);
     file.write(buffer, bytesReceived);
     file.close();
-    std::cout << "Received a dns response, stored in src/serverResponse.txt" << std::endl;
+    std::cout << "Received a dns response, stored in src/serverResponse.txt." << std::endl;
     close(udpSocket);
 }
