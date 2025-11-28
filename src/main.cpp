@@ -8,6 +8,8 @@
 #include <fstream>
 #include <vector>
 
+bool parse_ip_address(uint32_t &dst_ip, uint16_t &dst_port, std::string src, std::string &error_mes);
+
 int main(int argc, char **argv)
 {
     // Flush after every std::cout / std::cerr
@@ -17,11 +19,32 @@ int main(int argc, char **argv)
     // Disable output buffering
     setbuf(stdout, NULL);
 
-    // You can use print statements as follows for debugging, they'll be visible when running tests.
-    std::cout << "Logs from your program will appear here!" << std::endl;
+    std::cout << "Starting the server..." << std::endl;
+
+    if (argc != 3)
+    {
+        std::cerr << "Your are giving " << argc - 1 << " arguments, 2 expected!" << std::endl;
+        return 1;
+    }
+    if (std::string(argv[1]) != "--resolver")
+    {
+        std::cerr << "You are supposed to give flag \"--resolver\", you give \"" << argv[1] << "\"." << std::endl;
+        return 1;
+    }
+    uint32_t resolver_ip;
+    uint16_t resolver_port;
+    std::string temp; // if wrong, it will be error, if not it is string representation of address
+    if (!parse_ip_address(resolver_ip, resolver_port, std::string(argv[2]), temp))
+    {
+        std::cerr << temp << std::endl;
+        return 1;
+    }
+    std::cout << "Your DNS Server/Forwarder is active and ready to receive packet." << std::endl;
+    std::cout << "It will forward your query to the following DNS server:" << std::endl;
+    std::cout << "IP = " << temp << std::endl;
+    std::cout << "Port = " << resolver_port << std::endl;
 
     int udpSocket;
-    sockaddr_in clientAddress;
 
     udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (udpSocket == -1)
@@ -51,12 +74,12 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    int bytesRead;
-    char buffer[512];
-    socklen_t clientAddrLen = sizeof(clientAddress);
-
     while (true)
     {
+        sockaddr_in clientAddress;
+        int bytesRead;
+        char buffer[512];
+        socklen_t clientAddrLen = sizeof(clientAddress);
         // Receive data
         bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, reinterpret_cast<struct sockaddr *>(&clientAddress), &clientAddrLen);
         if (bytesRead == -1)
@@ -149,6 +172,42 @@ int main(int argc, char **argv)
 
     return 0;
 }
+bool parse_ip_address(uint32_t &dst_ip, uint16_t &dst_port, std::string src, std::string &error_mes)
+{
+    // Split into both path with the first ":"
+    int pos = src.find(":");
+    if (pos == std::string::npos)
+    {
+        error_mes = "The arguement should be in format <ip>:<port>, e.g: 0.0.0.0:80. You give " + src + ".";
+        return false;
+    }
+    std::string ip = src.substr(0, pos);
+    if (!inet_pton(AF_INET, ip.data(), &dst_ip))
+    {
+        error_mes = "Not a correct IPv4 address format! You give " + ip + ", expected a.b.c.d, e.g: 1.2.3.4!";
+        return false;
+    }
+    std::string port = src.substr(pos + 1);
+    try
+    {
+        size_t idx = 0;
+        dst_port = std::stoi(port, &idx);
+
+        // Check if the entire string was consumed
+        if (idx != port.size())
+        {
+            throw std::invalid_argument("");
+        }
+    }
+    catch (...)
+    {
+        error_mes = "Can not convert into integer from \"" + port + "\"!";
+        return false;
+    }
+    error_mes = ip;
+    return true;
+}
+
 /*
 Test command
 cat input.txt | nc -u 127.0.0.1 2053 > output.txt
