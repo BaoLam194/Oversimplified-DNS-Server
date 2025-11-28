@@ -8,7 +8,11 @@
 #include <fstream>
 #include <vector>
 
+// Global variable
+sockaddr_in resolver; // The ultimate higher level resolver, set differently each time run for flexibility and test case?
+
 bool parse_ip_address(uint32_t &dst_ip, uint16_t &dst_port, std::string src, std::string &error_mes);
+void str_cli(int sockfd);
 
 int main(int argc, char **argv)
 {
@@ -20,7 +24,7 @@ int main(int argc, char **argv)
     setbuf(stdout, NULL);
 
     std::cout << "Starting the server..." << std::endl;
-
+    // Initialize the upstream resolver
     if (argc != 3)
     {
         std::cerr << "Your are giving " << argc - 1 << " arguments, 2 expected!" << std::endl;
@@ -43,9 +47,14 @@ int main(int argc, char **argv)
     std::cout << "It will forward your query to the following DNS server:" << std::endl;
     std::cout << "IP = " << temp << std::endl;
     std::cout << "Port = " << resolver_port << std::endl;
+    resolver = {
+        .sin_family = AF_INET,
+        .sin_port = htons(resolver_port),
+        .sin_addr = {resolver_ip},
+    };
 
+    // Create socket
     int udpSocket;
-
     udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (udpSocket == -1)
     {
@@ -76,102 +85,102 @@ int main(int argc, char **argv)
 
     while (true)
     {
-        sockaddr_in clientAddress;
-        int bytesRead;
-        char buffer[512];
-        socklen_t clientAddrLen = sizeof(clientAddress);
-        // Receive data
-        bytesRead = recvfrom(udpSocket, buffer, sizeof(buffer), 0, reinterpret_cast<struct sockaddr *>(&clientAddress), &clientAddrLen);
-        if (bytesRead == -1)
-        {
-            perror("Error receiving data");
-            break;
-        }
-
-        buffer[bytesRead] = '\0';
-        std::cout << "Received " << bytesRead << " bytes." << std::endl;
-        // Read the receive into a file for debugging
-        std::ofstream file("./src/clientQuery.txt", std::ios::out | std::ios::trunc);
-        file.write(buffer, bytesRead);
-        file.close();
-        std::cout << "Just received a dns query, stored in src/clientQuery.txt." << std::endl;
-
-        // Parse the buffer into query
-        DNSMessage query;
-        size_t bufOffset = 0;
-        parseDNSMessage(query, buffer, bufOffset);
-
-        // Create an empty message and craft the response with the query
-        DNSMessage response;
-        // Handle Header
-        response.header.transactionId = query.header.transactionId;
-        if (ntohs(query.header.flags) & (1 << 15)) // if flag bit is reply, then wrong
-        {
-            std::cerr << "Expected a query, received reply." << strerror(errno) << std::endl;
-            return 1;
-        }
-        response.header.flags = query.header.flags | htons(1 << 15);
-        response.header.qdCount = query.header.qdCount;
-        // 0 should be same for both network and host byte.
-        response.header.anCount = response.header.qdCount;
-        response.header.nsCount = 0;
-        response.header.arCount = 0;
-
-        // Handle question
-        size_t numQ = ntohs(response.header.qdCount);
-        for (int i = 0; i < numQ; i++)
-        {
-            DNSQuestion q;
-            q.qName = query.questions[i].qName;
-            if (ntohs(query.questions[i].qType) != 1 || ntohs(query.questions[i].qClass) != 1)
-            {
-                std::cerr << "Expected a 'A' record type and 'IN' record class for questions only. Wrong index =" << i << std::endl;
-                return 1;
-            }
-            q.qType = query.questions[i].qType;
-            q.qClass = query.questions[i].qClass;
-            response.questions.push_back(q);
-        }
-
-        // Handle answer
-        size_t numA = ntohs(response.header.qdCount);
-        for (int i = 0; i < numA; i++)
-        {
-            DNSAnswer a;
-            a.name = query.questions[i].qName;
-            if (ntohs(query.questions[i].qType) != 1 || ntohs(query.questions[i].qClass) != 1)
-            {
-                std::cerr << "Expected a 'A' record type and 'IN' record class for answers only. Wrong index =" << i << std::endl;
-                return 1;
-            }
-            a.type = query.questions[i].qType;
-            a._class = query.questions[i].qClass;
-            a.ttl = htonl(60);
-            a.rdLength = htons(4);
-            a.rData = "\x08"
-                      "\x08"
-                      "\x08"
-                      "\x08";
-            response.answers.push_back(a);
-        }
-
-        // Serialize everything into a buffer:
-        char sendBuf[512];
-        size_t offset = 0;
-        serializeDNSMessage(sendBuf, response, offset);
-        // Send response
-
-        if (sendto(udpSocket, sendBuf, offset, 0, reinterpret_cast<struct sockaddr *>(&clientAddress), sizeof(clientAddress)) == -1)
-        {
-            perror("Failed to send response");
-        }
-        std::cout << "Send back DNS reply to answer the query" << std::endl;
+        str_cli(udpSocket);
     }
 
     close(udpSocket);
 
     return 0;
 }
+void str_cli(int sockfd)
+{
+    std::cout << "Waiting to receive RFC1035 format DNS query." << std::endl;
+    // Receive data
+    sockaddr_in clientAddress;
+    socklen_t clientAddrLen = sizeof(clientAddress);
+    int bytesRead;
+    char buffer[512];
+    bytesRead = recvfrom(sockfd, buffer, sizeof(buffer), 0,
+                         reinterpret_cast<struct sockaddr *>(&clientAddress), &clientAddrLen);
+    if (bytesRead == -1)
+    {
+        std::cerr << "Error receiving data" << std::endl;
+        return;
+    }
+    buffer[bytesRead] = '\0';
+    // Read the receive into a file for debugging
+    std::cout << "Received a " << bytesRead << "-byte query, stored in src/clientQuery.txt" << std::endl;
+    std::ofstream file("./src/clientQuery.txt", std::ios::out | std::ios::trunc);
+    file.write(buffer, bytesRead);
+    file.close();
+
+    // Parse the buffer into query
+    DNSMessage query;
+    size_t bufOffset = 0;
+    parseDNSMessage(query, buffer, bufOffset);
+    if (ntohs(query.header.flags) & (1 << 15)) // if flag bit is reply, then wrong
+    {
+        std::cerr << "Expected a query, received reply." << strerror(errno) << std::endl;
+        return;
+    }
+    std::cout << "Querying to upstream resolver..." << std::endl;
+
+    // Split query if mutiple questions to forward
+    DNSMessage splitForwardQuery, response;
+    int count = ntohs(query.header.qdCount);
+    splitForwardQuery.header = query.header; // Header always the same for each seperate question
+
+    splitForwardQuery.header.flags |= htons(1 << 8);
+    // This line is depend on query, but on test case with 1.1.1.1, it requires you to activate this bit
+
+    splitForwardQuery.header.qdCount = htons(1); // IMPORTANT!!!
+
+    // Construct response
+    response.header = query.header;
+    response.header.anCount = response.header.qdCount;
+    response.header.flags = query.header.flags | htons(1 << 15); // Set it as response
+    for (int i = 0; i < count; i++)
+    {
+        // Construct query for resolver and send
+        while (splitForwardQuery.questions.size())
+        {
+            splitForwardQuery.questions.pop_back();
+        }
+        splitForwardQuery.questions.push_back(query.questions[i]);
+        response.questions.push_back(query.questions[i]);
+
+        char sendTempBuf[512];
+        size_t offsetTemp = 0;
+        serializeDNSMessage(sendTempBuf, splitForwardQuery, offsetTemp);
+        if (sendto(sockfd, sendTempBuf, offsetTemp, 0, reinterpret_cast<sockaddr *>(&resolver), sizeof(resolver)) == -1)
+        {
+            std::cerr << "Send data fails. Please try again!" << std::endl;
+        }
+        // Receive and add into real query
+        char recvTempBuf[512];
+        size_t offsetRcvTemp = 0;
+        sockaddr_in recvAddr;
+        socklen_t recvAddrLen = sizeof(sockaddr_in);
+        int bytesReceived = recvfrom(sockfd, recvTempBuf, sizeof(recvTempBuf), 0, reinterpret_cast<sockaddr *>(&recvAddr), &recvAddrLen);
+        if (bytesReceived == -1)
+        {
+            std::cerr << "Error receiving dns response! " << std::endl;
+            return;
+        }
+        DNSMessage temp;
+        parseDNSMessage(temp, recvTempBuf, offsetRcvTemp);
+        response.answers.push_back(temp.answers[0]);
+    }
+
+    char sendBuf[512];
+    size_t sendOffset = 0;
+    serializeDNSMessage(sendBuf, response, sendOffset);
+    if (sendto(sockfd, sendBuf, sendOffset, 0, reinterpret_cast<sockaddr *>(&clientAddress), clientAddrLen) == -1)
+    {
+        std::cerr << "Send data fails. Please try again!" << std::endl;
+    }
+}
+
 bool parse_ip_address(uint32_t &dst_ip, uint16_t &dst_port, std::string src, std::string &error_mes)
 {
     // Split into both path with the first ":"
@@ -207,10 +216,3 @@ bool parse_ip_address(uint32_t &dst_ip, uint16_t &dst_port, std::string src, std
     error_mes = ip;
     return true;
 }
-
-/*
-Test command
-cat input.txt | nc -u 127.0.0.1 2053 > output.txt
-
-hexdump -C output.txt
-*/

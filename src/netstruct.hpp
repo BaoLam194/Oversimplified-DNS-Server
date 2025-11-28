@@ -29,6 +29,7 @@ struct DNSHeader
             this->nsCount = rhs.nsCount;
             this->arCount = rhs.arCount;
         }
+        return *this;
     }
 };
 
@@ -42,9 +43,10 @@ struct DNSQuestion
         if (this != &rhs)
         {
             this->qName = rhs.qName;
-            this->qName = rhs.qType;
-            this->qName = rhs.qClass;
+            this->qType = rhs.qType;
+            this->qClass = rhs.qClass;
         }
+        return *this;
     }
 };
 struct DNSAnswer
@@ -173,7 +175,6 @@ void serializeDNSMessage(char *dest, DNSMessage &src, size_t &pos)
         memcpy(dest + pos, &(q.qClass), sizeof(uint16_t));
         pos += sizeof(uint16_t);
     }
-
     // Serialize each answer
     size_t numA = ntohs(src.header.anCount);
     for (int i = 0; i < numA; i++)
@@ -190,8 +191,10 @@ void serializeDNSMessage(char *dest, DNSMessage &src, size_t &pos)
         pos += sizeof(uint32_t);
         memcpy(dest + pos, &(a.rdLength), sizeof(uint16_t));
         pos += sizeof(uint16_t);
-        memcpy(dest + pos, a.rData.data(), (size_t)a.rData.length());
-        pos += a.rData.length();
+        uint32_t tempIP;
+        inet_pton(AF_INET, a.rData.data(), &tempIP);
+        memcpy(dest + pos, &tempIP, sizeof(uint32_t));
+        pos += sizeof(uint32_t);
     }
 }
 
@@ -216,6 +219,40 @@ void parseDNSMessage(DNSMessage &dest, char *src, size_t &pos)
         memcpy(&q.qClass, src + pos, sizeof(uint16_t));
         pos += sizeof(uint16_t);
         dest.questions.push_back(q);
+    }
+    size_t numA = ntohs(dest.header.anCount);
+    std::cout << "Hello from inside " << numA << std::endl;
+
+    for (int i = 0; i < numA; i++)
+    {
+        DNSAnswer a;
+        size_t label_len = 0;
+        a.name = parseName(src, pos, label_len);
+
+        memcpy(&a.type, src + pos, sizeof(uint16_t));
+        pos += sizeof(uint16_t);
+        memcpy(&a._class, src + pos, sizeof(uint16_t));
+        pos += sizeof(uint16_t);
+
+        memcpy(&a.ttl, src + pos, sizeof(uint32_t));
+        pos += sizeof(uint32_t);
+        memcpy(&a.rdLength, src + pos, sizeof(uint16_t));
+        pos += sizeof(uint16_t);
+
+        int ansLen = ntohs(a.rdLength);
+        // Convert raw bytes → dotted IPv4 string
+        for (int j = 0; j < ansLen; j++)
+        {
+            if (j)
+                a.rData += '.';
+            unsigned char temp = src[pos + j];
+            a.rData += std::to_string(int(temp));
+        }
+        // char ipBuffer[INET_ADDRSTRLEN];
+        // inet_ntop(AF_INET, src + pos, ipBuffer, sizeof(ipBuffer));
+        // a.rData = ipBuffer;
+        pos += 4;
+        dest.answers.push_back(a);
     }
 }
 

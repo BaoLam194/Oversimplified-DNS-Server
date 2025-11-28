@@ -40,7 +40,7 @@ int main(int argc, char **argv) // Take in a ipv4 address argument and send to t
     };
     // Construct a normal dns query
     DNSMessage req;
-    req.header.transactionId = htons(5555);
+    req.header.transactionId = htons(1904);
     req.header.flags = 0;
     req.header.qdCount = htons(2);
     req.header.anCount = 0;
@@ -63,7 +63,7 @@ int main(int argc, char **argv) // Take in a ipv4 address argument and send to t
 
     serializeDNSMessage(sendBuf, req, offset);
     // Send to serverAddress a dns query
-    if (!sendto(udpSocket, sendBuf, offset, 0, reinterpret_cast<sockaddr *>(&serverAddress), sizeof(serverAddress)))
+    if (sendto(udpSocket, sendBuf, offset, 0, reinterpret_cast<sockaddr *>(&serverAddress), sizeof(serverAddress)) == -1)
     {
         std::cerr << "Send data fails. Please try again!" << std::endl;
         return 1;
@@ -84,6 +84,6 @@ int main(int argc, char **argv) // Take in a ipv4 address argument and send to t
     std::ofstream file("./src/serverResponse.txt", std::ios::out | std::ios::trunc);
     file.write(buffer, bytesReceived);
     file.close();
-    std::cout << "Received a dns response, stored in src/serverResponse.txt." << std::endl;
+    std::cout << "Received a dns response with" << bytesReceived << "bytes, stored in src/serverResponse.txt." << std::endl;
     close(udpSocket);
 }
